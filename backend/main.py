@@ -51,6 +51,15 @@ class QueryResponse(BaseModel):
     answer: str
     data: dict
     chart_type: str
+    suggestions: list = []
+
+class ChatRequest(BaseModel):
+    question: str
+
+class ChatResponse(BaseModel):
+    answer: str
+    needs_ticker: bool = False
+    suggestions: list = []
 
 def save_to_nocodb(question: str, ticker: str, response: dict):
     """Save query history to NocoDB"""
@@ -149,32 +158,60 @@ def analyze_with_gemini(question: str, stock_data: dict):
         ticker = stock_data["ticker"]
         info = stock_data["info"]
         hist = stock_data["history"]
+        dividends = stock_data["dividends"]
         
-        # Prepare context for Gemini
+        # Calculate additional metrics
+        price_change = 0
+        price_change_pct = 0
+        if not hist.empty and len(hist) > 1:
+            price_change = hist["Close"].iloc[-1] - hist["Close"].iloc[0]
+            price_change_pct = (price_change / hist["Close"].iloc[0]) * 100
+        
+        # Prepare comprehensive context for Gemini
         context = f"""
-You are a financial assistant analyzing stock data for {ticker}.
+You are an intelligent financial assistant helping users understand stock market data. Be conversational, helpful, and insightful.
 
-Available data:
-- Company: {info.get('longName', ticker)}
-- Sector: {info.get('sector', 'N/A')}
+Current Stock: {ticker}
+Company: {info.get('longName', ticker)}
+Sector: {info.get('sector', 'N/A')}
+Industry: {info.get('industry', 'N/A')}
+
+Current Metrics:
 - Current Price: ${info.get('currentPrice', 0):.2f}
 - Market Cap: ${info.get('marketCap', 0):,.0f}
 - 52 Week High: ${info.get('fiftyTwoWeekHigh', 0):.2f}
 - 52 Week Low: ${info.get('fiftyTwoWeekLow', 0):.2f}
 - P/E Ratio: {info.get('trailingPE', 'N/A')}
+- EPS: ${info.get('trailingEps', 0):.2f}
 - Dividend Yield: {info.get('dividendYield', 0) * 100:.2f}%
+- Beta: {info.get('beta', 'N/A')}
+- Volume: {info.get('volume', 0):,}
+- Average Volume: {info.get('averageVolume', 0):,}
 
-Recent price data available: {len(hist)} days
+Recent Performance:
+- Price Change: ${price_change:.2f} ({price_change_pct:+.2f}%)
+- Historical Data Points: {len(hist)} days
+- Has Dividends: {'Yes' if not dividends.empty else 'No'}
 
-User question: {question}
+User Question: "{question}"
 
-Based on the question, determine:
-1. What type of chart to show: "candlestick", "line", "volume", "bar", or "none"
-2. A brief, informative answer (2-3 sentences max)
+Instructions:
+1. Answer the user's question naturally and conversationally
+2. Provide insights, analysis, or explanations based on the data
+3. If asked about trends, performance, or analysis, give thoughtful commentary
+4. If asked general questions about investing or the company, provide helpful information
+5. Be friendly and engaging, like a knowledgeable financial advisor
 
-Respond in this exact format:
+Determine the best chart to show:
+- "candlestick" for price action, OHLC data, trading patterns
+- "line" for simple price trends over time
+- "volume" for trading volume analysis
+- "bar" for dividend history
+- "none" for general questions, company info, or when no chart is needed
+
+Respond in this EXACT format:
 CHART_TYPE: [type]
-ANSWER: [your answer]
+ANSWER: [your conversational, helpful answer - be natural and insightful]
 """
         
         response = model.generate_content(context)
@@ -300,14 +337,152 @@ def parse_question(question: str, ticker: str, period: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error: {str(e)}")
 
+def generate_suggestions(ticker: str, question: str) -> list:
+    """Generate follow-up question suggestions"""
+    suggestions = [
+        f"What's the P/E ratio of {ticker}?",
+        f"Show me {ticker}'s dividend history",
+        f"How has {ticker} performed this year?",
+        f"Compare {ticker} to its 52-week high",
+        f"What sector is {ticker} in?",
+        "Show me the trading volume"
+    ]
+    return suggestions[:4]
+
 @app.get("/")
 def read_root():
-    return {"message": "YFinance Chatbot API"}
+    return {"message": "YFinance Chatbot API - Powered by Gemini 2.0 Flash"}
+
+@app.get("/market-overview")
+def get_market_overview():
+    """Get top gainers, losers, and most active stocks"""
+    try:
+        # Popular stocks to check
+        tickers = [
+            "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "AMD", 
+            "NFLX", "DIS", "PYPL", "INTC", "COIN", "SNAP", "PLTR", "RIVN",
+            "LCID", "NIO", "BABA", "JD", "PFE", "MRNA", "BA", "GE", "F"
+        ]
+        
+        def get_stock_summary(ticker):
+            try:
+                stock = yf.Ticker(ticker)
+                hist = stock.history(period="2d")
+                
+                if len(hist) < 2:
+                    return None
+                
+                current_price = hist["Close"].iloc[-1]
+                prev_close = hist["Close"].iloc[-2]
+                change = current_price - prev_close
+                change_pct = (change / prev_close) * 100 if prev_close else 0
+                
+                # Get company name
+                try:
+                    info = stock.info
+                    name = info.get("shortName", ticker)
+                    volume = hist["Volume"].iloc[-1]
+                except:
+                    name = ticker
+                    volume = hist["Volume"].iloc[-1] if "Volume" in hist.columns else 0
+                
+                return {
+                    "ticker": ticker,
+                    "name": name,
+                    "price": round(float(current_price), 2),
+                    "change": round(float(change), 2),
+                    "change_pct": round(float(change_pct), 2),
+                    "volume": int(volume)
+                }
+            except Exception as e:
+                print(f"Error fetching {ticker}: {e}")
+                return None
+        
+        # Fetch all stocks
+        all_stocks = [s for s in [get_stock_summary(t) for t in tickers] if s]
+        
+        # Sort and categorize
+        gainers = sorted([s for s in all_stocks if s["change_pct"] > 0], 
+                        key=lambda x: x["change_pct"], reverse=True)[:5]
+        losers = sorted([s for s in all_stocks if s["change_pct"] < 0], 
+                       key=lambda x: x["change_pct"])[:5]
+        active = sorted(all_stocks, key=lambda x: x["volume"], reverse=True)[:5]
+        
+        return {
+            "gainers": gainers,
+            "losers": losers,
+            "active": active
+        }
+    except Exception as e:
+        print(f"Market overview error: {e}")
+        return {
+            "gainers": [],
+            "losers": [],
+            "active": []
+        }
+
+@app.post("/chat", response_model=ChatResponse)
+def chat(request: ChatRequest):
+    """General chat endpoint for any question"""
+    question = request.question.lower()
+    
+    # Check if user is asking a general question without context
+    if not model:
+        return ChatResponse(
+            answer="I'm a stock market assistant. Please provide a stock ticker (like AAPL, GOOGL, MSFT) to get started!",
+            needs_ticker=True,
+            suggestions=["Tell me about AAPL", "Show me TSLA stock", "What's GOOGL doing?"]
+        )
+    
+    try:
+        # Use Gemini for general conversation
+        context = f"""
+You are a friendly and knowledgeable stock market assistant. The user asked: "{request.question}"
+
+If the question is about:
+1. A specific stock - ask them to provide the ticker symbol
+2. General investing advice - provide helpful, educational information
+3. How to use the chatbot - explain features
+4. Market concepts - explain clearly and simply
+
+Be conversational, helpful, and engaging. Keep responses concise (2-3 sentences).
+
+If you need a stock ticker to answer, say so clearly.
+"""
+        
+        response = model.generate_content(context)
+        answer = response.text.strip()
+        
+        # Check if we need a ticker
+        needs_ticker = any(word in answer.lower() for word in ["ticker", "symbol", "which stock", "what stock"])
+        
+        suggestions = [
+            "Tell me about AAPL",
+            "Show me TSLA performance",
+            "What's GOOGL's market cap?",
+            "Explain P/E ratio"
+        ]
+        
+        return ChatResponse(
+            answer=answer,
+            needs_ticker=needs_ticker,
+            suggestions=suggestions
+        )
+    except Exception as e:
+        return ChatResponse(
+            answer="I'm here to help you with stock market data! Try asking about a specific stock like AAPL, GOOGL, or TSLA.",
+            needs_ticker=True,
+            suggestions=["Tell me about AAPL", "Show me TSLA stock", "What's GOOGL doing?"]
+        )
 
 @app.post("/query", response_model=QueryResponse)
 def query_stock(request: QueryRequest):
     """Process natural language query about stocks"""
     result = parse_question(request.question, request.ticker, request.period)
+    
+    # Add suggestions
+    if request.ticker:
+        result["suggestions"] = generate_suggestions(request.ticker, request.question)
     
     # Save to NocoDB
     save_to_nocodb(request.question, request.ticker or "", result)

@@ -18,6 +18,10 @@ API_URL = "http://localhost:8000"
 # Initialize session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "quick_question" not in st.session_state:
+    st.session_state.quick_question = None
+if "ticker" not in st.session_state:
+    st.session_state.ticker = "AAPL"
 
 def create_candlestick_chart(data):
     """Create candlestick chart with Plotly"""
@@ -108,10 +112,78 @@ def create_dividend_chart(data):
 st.title("📈 YFinance Chatbot")
 st.markdown("Ask questions about stocks and get instant answers with interactive charts!")
 
+# Market Overview Section
+with st.expander("📊 Market Overview - Top Movers", expanded=True):
+    with st.spinner("Loading market data..."):
+        try:
+            market_data = requests.get(f"{API_URL}/market-overview", timeout=10).json()
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown("### 🚀 Top Gainers")
+                for stock in market_data.get("gainers", [])[:5]:
+                    change_color = "green" if stock["change_pct"] > 0 else "red"
+                    st.markdown(f"""
+                    <div style="padding: 8px; margin: 4px 0; background-color: rgba(255,255,255,0.05); border-radius: 5px;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <div>
+                                <strong style="color: #1f77b4;">{stock['ticker']}</strong><br>
+                                <small style="color: #888;">{stock['name'][:20]}</small>
+                            </div>
+                            <div style="text-align: right;">
+                                <strong>${stock['price']}</strong><br>
+                                <small style="color: {change_color};">+{stock['change']} (+{stock['change_pct']}%)</small>
+                            </div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown("### 📉 Top Losers")
+                for stock in market_data.get("losers", [])[:5]:
+                    change_color = "red"
+                    st.markdown(f"""
+                    <div style="padding: 8px; margin: 4px 0; background-color: rgba(255,255,255,0.05); border-radius: 5px;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <div>
+                                <strong style="color: #1f77b4;">{stock['ticker']}</strong><br>
+                                <small style="color: #888;">{stock['name'][:20]}</small>
+                            </div>
+                            <div style="text-align: right;">
+                                <strong>${stock['price']}</strong><br>
+                                <small style="color: {change_color};">{stock['change']} ({stock['change_pct']}%)</small>
+                            </div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            with col3:
+                st.markdown("### 🔥 Most Active")
+                for stock in market_data.get("active", [])[:5]:
+                    change_color = "green" if stock["change_pct"] > 0 else "red"
+                    sign = "+" if stock["change_pct"] > 0 else ""
+                    st.markdown(f"""
+                    <div style="padding: 8px; margin: 4px 0; background-color: rgba(255,255,255,0.05); border-radius: 5px;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <div>
+                                <strong style="color: #1f77b4;">{stock['ticker']}</strong><br>
+                                <small style="color: #888;">{stock['name'][:20]}</small>
+                            </div>
+                            <div style="text-align: right;">
+                                <strong>${stock['price']}</strong><br>
+                                <small style="color: {change_color};">{sign}{stock['change']} ({sign}{stock['change_pct']}%)</small>
+                            </div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+        except Exception as e:
+            st.info("Market overview loading...")
+
 # Sidebar
 with st.sidebar:
-    st.header("Settings")
-    ticker = st.text_input("Stock Ticker", value="AAPL", help="Enter stock symbol (e.g., AAPL, GOOGL)")
+    st.header("⚙️ Settings")
+    ticker = st.text_input("Stock Ticker", value="AAPL", help="Enter stock symbol (e.g., AAPL, GOOGL, MSFT, TSLA)")
     period = st.selectbox(
         "Time Period",
         ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "max"],
@@ -119,24 +191,49 @@ with st.sidebar:
     )
     
     st.markdown("---")
-    st.markdown("### Example Questions")
+    st.markdown("### 💡 Try These")
+    
+    # Quick action buttons
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📊 Price Chart", use_container_width=True):
+            st.session_state.quick_question = "Show me the price chart"
+        if st.button("📈 Performance", use_container_width=True):
+            st.session_state.quick_question = "How has this stock performed?"
+        if st.button("💰 Dividends", use_container_width=True):
+            st.session_state.quick_question = "What are the dividends?"
+    
+    with col2:
+        if st.button("ℹ️ Company Info", use_container_width=True):
+            st.session_state.quick_question = "Tell me about this company"
+        if st.button("📊 Volume", use_container_width=True):
+            st.session_state.quick_question = "Show me the trading volume"
+        if st.button("🎯 Analysis", use_container_width=True):
+            st.session_state.quick_question = "Give me a detailed analysis"
+    
+    st.markdown("---")
+    st.markdown("### 📝 Example Questions")
     st.markdown("""
-    - Show me the price chart
-    - What's the company info?
-    - Show me the volume
-    - What are the dividends?
-    - Show me the price trend
+    - What's the P/E ratio?
+    - Is this stock overvalued?
+    - Compare to 52-week high
+    - What sector is this in?
+    - Should I invest in this?
+    - Explain the recent trend
     """)
     
     st.markdown("---")
-    if st.button("View History"):
-        try:
-            response = requests.get(f"{API_URL}/history")
-            if response.status_code == 200:
-                history = response.json()
-                st.json(history)
-        except Exception as e:
-            st.error(f"Error fetching history: {e}")
+    if st.button("🗑️ Clear Chat", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+    
+    st.markdown("---")
+    st.markdown("### 📊 Popular Stocks")
+    popular = ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA", "META"]
+    selected_stock = st.selectbox("Quick Select", popular, index=0)
+    if st.button("Load Stock", use_container_width=True):
+        st.session_state.ticker = selected_stock
+        st.rerun()
 
 # Chat interface
 st.markdown("### Chat")
@@ -148,8 +245,16 @@ for message in st.session_state.messages:
         if "chart" in message:
             st.plotly_chart(message["chart"], use_container_width=True)
 
+# Handle quick questions from sidebar
+if st.session_state.quick_question:
+    prompt = st.session_state.quick_question
+    st.session_state.quick_question = None
+    st.rerun()
+
 # Chat input
-if prompt := st.chat_input("Ask about a stock..."):
+prompt = st.chat_input("Ask me anything about stocks... 💬")
+
+if prompt:
     # Add user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -157,7 +262,7 @@ if prompt := st.chat_input("Ask about a stock..."):
     
     # Get response from API
     with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
+        with st.spinner("🤔 Analyzing..."):
             try:
                 response = requests.post(
                     f"{API_URL}/query",
@@ -165,7 +270,8 @@ if prompt := st.chat_input("Ask about a stock..."):
                         "question": prompt,
                         "ticker": ticker,
                         "period": period
-                    }
+                    },
+                    timeout=30
                 )
                 
                 if response.status_code == 200:
@@ -173,6 +279,7 @@ if prompt := st.chat_input("Ask about a stock..."):
                     answer = result["answer"]
                     data = result["data"]
                     chart_type = result["chart_type"]
+                    suggestions = result.get("suggestions", [])
                     
                     # Display answer
                     st.markdown(answer)
@@ -193,13 +300,25 @@ if prompt := st.chat_input("Ask about a stock..."):
                         st.session_state.messages.append({
                             "role": "assistant",
                             "content": answer,
-                            "chart": chart
+                            "chart": chart,
+                            "suggestions": suggestions
                         })
                     else:
                         st.session_state.messages.append({
                             "role": "assistant",
-                            "content": answer
+                            "content": answer,
+                            "suggestions": suggestions
                         })
+                    
+                    # Display suggestions
+                    if suggestions:
+                        st.markdown("**💡 You might also want to ask:**")
+                        cols = st.columns(min(len(suggestions), 2))
+                        for idx, suggestion in enumerate(suggestions[:4]):
+                            with cols[idx % 2]:
+                                if st.button(suggestion, key=f"sug_{idx}_{len(st.session_state.messages)}"):
+                                    st.session_state.quick_question = suggestion
+                                    st.rerun()
                 else:
                     error_msg = f"Error: {response.json().get('detail', 'Unknown error')}"
                     st.error(error_msg)
@@ -215,8 +334,3 @@ if prompt := st.chat_input("Ask about a stock..."):
                     "role": "assistant",
                     "content": error_msg
                 })
-
-# Clear chat button
-if st.button("Clear Chat"):
-    st.session_state.messages = []
-    st.rerun()

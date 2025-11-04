@@ -4,13 +4,16 @@ A conversational chatbot for querying stock market data using natural language. 
 
 ## Features
 
-- 💬 Natural language queries powered by Google Gemini Flash
-- 🤖 Intelligent understanding of stock-related questions
-- 📊 Dynamic interactive charts (candlestick, line, volume, dividends)
-- 🔄 Real-time data from Yahoo Finance
-- 💾 Query history saved to NocoDB
-- 🎨 Beautiful UI with Streamlit
-- ⚡ Fast API backend with FastAPI
+- 🤖 **AI-Powered Conversations** - Natural language queries powered by Google Gemini 2.0 Flash
+- 💬 **Interactive Chatbot** - Ask any question about stocks, investing, or market analysis
+- 📊 **Dynamic Charts** - Beautiful interactive charts (candlestick, line, volume, dividends)
+- 🎯 **Smart Suggestions** - Get follow-up question recommendations after each query
+- ⚡ **Quick Actions** - One-click buttons for common queries
+- 🔄 **Real-time Data** - Live stock data from Yahoo Finance
+- 📈 **Comprehensive Analysis** - P/E ratios, market cap, dividends, volume, and more
+- 💾 **History Tracking** - Save all queries to NocoDB
+- 🎨 **Beautiful UI** - Modern, responsive interface with Streamlit
+- 🚀 **Fast API** - High-performance backend with FastAPI
 
 ## Project Structure
 
@@ -97,11 +100,31 @@ The app will open in your browser at `http://localhost:8501`
 
 ## Example Questions
 
-- **Price Data**: "Show me the price chart", "What's the current price?"
-- **Company Info**: "Tell me about the company", "What sector is it in?"
-- **Volume**: "Show me the trading volume"
-- **Dividends**: "What are the dividends?"
-- **Trends**: "Show me the price trend"
+The chatbot can handle a wide variety of questions:
+
+**Basic Queries:**
+- "Show me the price chart"
+- "What's the current price?"
+- "Tell me about this company"
+
+**Analysis & Insights:**
+- "How has this stock performed this year?"
+- "Is this stock overvalued?"
+- "Give me a detailed analysis"
+- "What's the P/E ratio?"
+- "Compare to the 52-week high"
+
+**Market Data:**
+- "Show me the trading volume"
+- "What are the dividends?"
+- "What sector is this in?"
+- "Show me the price trend"
+
+**Investment Questions:**
+- "Should I invest in this stock?"
+- "What are the risks?"
+- "Explain the recent trend"
+- "How volatile is this stock?"
 
 ## API Endpoints
 
