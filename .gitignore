@@ -93,6 +93,20 @@ Thumbs.db
 .DS_Store
 desktop.ini
 
-# Project specific
-STATUS.md
-GEMINI_SETUP.md
+# Project specific - exclude all markdown docs except README
+*.md
+!README.md
+
+# Cache directories
+__pycache__/
+.cache/
+
+# OpenSearch data
+opensearch-data/
+
+# Model cache (sentence transformers)
+.cache/
+sentence-transformers/
+
+# NocoDB data
+nocodb/
